@@ -21,6 +21,11 @@ public final class Config {
             .comment("While your world is open to LAN, let friends on the same network copy your mods with their Update button.")
             .define("shareModsOnLan", true);
 
+    public static final ModConfigSpec.BooleanValue SHARE_CONFIGS_ON_LAN = BUILDER
+            .comment("Also share your config files (mod settings) with friends who copy your mods.",
+                    "Turn this off if a mod keeps private data, such as a login token, in its config file.")
+            .define("shareConfigsOnLan", true);
+
     public static final ModConfigSpec.IntValue SHARE_PORT = BUILDER
             .comment("TCP port used to share your mods on the LAN. Friends who type your address by hand need this port.")
             .defineInRange("lanSharePort", DEFAULT_PORT, 1024, 65535);
@@ -51,6 +56,14 @@ public final class Config {
     public static boolean shareOnLan() {
         try {
             return SHARE_ON_LAN.getAsBoolean();
+        } catch (RuntimeException notLoaded) {
+            return true;
+        }
+    }
+
+    public static boolean shareConfigsOnLan() {
+        try {
+            return SHARE_CONFIGS_ON_LAN.getAsBoolean();
         } catch (RuntimeException notLoaded) {
             return true;
         }

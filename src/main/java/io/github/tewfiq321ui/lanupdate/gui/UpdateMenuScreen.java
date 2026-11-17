@@ -39,6 +39,8 @@ public final class UpdateMenuScreen extends BaseScreen {
             String ip = LanProtocol.localAddress();
             String address = (ip == null ? "?" : ip) + ":" + sharing.port();
             body.addChild(text(Component.translatable("lanupdate.menu.sharing", address).withStyle(ChatFormatting.GREEN)));
+            String configKey = Config.shareConfigsOnLan() ? "lanupdate.menu.sharing_configs" : "lanupdate.menu.sharing_no_configs";
+            body.addChild(text(Component.translatable(configKey).withStyle(ChatFormatting.GRAY)));
         } else {
             String key = Config.shareOnLan() ? "lanupdate.menu.not_sharing" : "lanupdate.menu.sharing_disabled";
             body.addChild(text(Component.translatable(key).withStyle(ChatFormatting.GRAY)));

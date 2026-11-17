@@ -5,6 +5,8 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import io.github.tewfiq321ui.lanupdate.LanUpdate;
+import io.github.tewfiq321ui.lanupdate.util.ConfigFiles;
+import io.github.tewfiq321ui.lanupdate.util.ConfigFiles.ConfigFile;
 import io.github.tewfiq321ui.lanupdate.util.ModJars.ModJar;
 import java.io.IOException;
 import java.net.Inet4Address;
@@ -26,6 +28,8 @@ import org.jspecify.annotations.Nullable;
  * .jar in the host's mods folder (name, size, SHA-256, mod IDs).</li>
  * <li>Files: {@code GET /lanupdate/file/<sha256>} returns one jar. Files are requested by hash,
  * so a friend can never ask for anything outside the host's mods folder.</li>
+ * <li>Config files (since 1.1.0, if the host allows it): listed under "configs" in the manifest
+ * with their path inside the config folder, and fetched with {@code GET /lanupdate/config/<sha256>}.</li>
  * </ul>
  */
 public final class LanProtocol {
@@ -35,12 +39,16 @@ public final class LanProtocol {
     public static final int VERSION = 1;
     public static final String MANIFEST_PATH = "/lanupdate/manifest";
     public static final String FILE_PATH = "/lanupdate/file/";
+    public static final String CONFIG_PATH = "/lanupdate/config/";
 
     public record Announcement(int port, String name) {}
 
     public record RemoteFile(String name, long size, String sha256, List<String> modIds) {}
 
-    public record Manifest(String host, String minecraft, String neoforge, List<RemoteFile> files) {}
+    /** A config file on the host; {@code path} is relative to the config folder, with "/" separators. */
+    public record RemoteConfig(String path, long size, String sha256) {}
+
+    public record Manifest(String host, String minecraft, String neoforge, List<RemoteFile> files, List<RemoteConfig> configs) {}
 
     private LanProtocol() {}
 
@@ -69,7 +77,7 @@ public final class LanProtocol {
         }
     }
 
-    public static String manifestJson(List<ModJar> jars, String worldName) {
+    public static String manifestJson(List<ModJar> jars, List<ConfigFile> configFiles, String worldName) {
         JsonObject root = new JsonObject();
         root.addProperty("protocol", VERSION);
         root.addProperty("host", worldName);
@@ -87,6 +95,15 @@ public final class LanProtocol {
             files.add(file);
         }
         root.add("files", files);
+        JsonArray configs = new JsonArray();
+        for (ConfigFile config : configFiles) {
+            JsonObject file = new JsonObject();
+            file.addProperty("path", config.relative());
+            file.addProperty("size", config.size());
+            file.addProperty("sha256", config.sha256());
+            configs.add(file);
+        }
+        root.add("configs", configs);
         return root.toString();
     }
 
@@ -109,7 +126,20 @@ public final class LanProtocol {
                 }
                 files.add(new RemoteFile(file.get("name").getAsString(), size, sha256, List.copyOf(ids)));
             }
-            return new Manifest(text(root, "host"), text(root, "minecraft"), text(root, "neoforge"), List.copyOf(files));
+            List<RemoteConfig> configs = new ArrayList<>();
+            if (root.has("configs")) { // hosts on 1.0.0 don't share configs
+                for (JsonElement element : root.getAsJsonArray("configs")) {
+                    JsonObject file = element.getAsJsonObject();
+                    String sha256 = file.get("sha256").getAsString().toLowerCase(java.util.Locale.ROOT);
+                    long size = file.get("size").getAsLong();
+                    String path = file.get("path").getAsString();
+                    // Skip anything this side would not accept, instead of failing the whole sync.
+                    if (sha256.matches("[0-9a-f]{64}") && size >= 0 && size <= ConfigFiles.MAX_FILE_BYTES && ConfigFiles.isShareable(path)) {
+                        configs.add(new RemoteConfig(path, size, sha256));
+                    }
+                }
+            }
+            return new Manifest(text(root, "host"), text(root, "minecraft"), text(root, "neoforge"), List.copyOf(files), List.copyOf(configs));
         } catch (RuntimeException e) {
             throw new IOException("The host sent a mod list this version cannot read. Make sure you both have the newest LAN Update Button.", e);
         }

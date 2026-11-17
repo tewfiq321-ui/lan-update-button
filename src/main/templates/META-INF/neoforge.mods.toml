@@ -11,7 +11,7 @@ description='''
 Adds an Update button to the title, multiplayer and pause menus.
 
 - Update from GitHub: downloads the newest release of this mod for your Minecraft version.
-- Copy mods from a LAN host: while a friend's world is open to LAN, copy their exact mods folder over your WiFi so everyone matches.
+- Copy mods from a LAN host: while a friend's world is open to LAN, copy their exact mods folder, and optionally their config files, over your WiFi so everyone matches.
 
 Restart Minecraft after updating to load the new files.
 '''

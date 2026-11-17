@@ -4,6 +4,7 @@ import com.mojang.logging.LogUtils;
 import io.github.tewfiq321ui.lanupdate.github.GithubUpdater;
 import io.github.tewfiq321ui.lanupdate.gui.UpdateMenuScreen;
 import io.github.tewfiq321ui.lanupdate.lan.LanShareServer;
+import io.github.tewfiq321ui.lanupdate.util.ConfigStaging;
 import io.github.tewfiq321ui.lanupdate.util.PendingDeletes;
 import io.github.tewfiq321ui.lanupdate.util.SelfCleanup;
 import net.minecraft.ChatFormatting;
@@ -48,11 +49,14 @@ public final class LanUpdate {
         container.registerConfig(ModConfig.Type.CLIENT, Config.SPEC);
         container.registerExtensionPoint(IConfigScreenFactory.class, ConfigurationScreen::new);
 
-        // Finish removing files that were still in use when Minecraft last closed.
+        // Finish anything left over from last time: files that were still in use, and copied
+        // config files that weren't applied because Minecraft didn't close normally.
         PendingDeletes.retryPending();
         SelfCleanup.removeOldCopies();
+        ConfigStaging.apply();
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             LanShareServer.stop();
+            ConfigStaging.apply(); // after mods have saved their own settings on the way out
             PendingDeletes.onShutdown();
         }, "lanupdate-shutdown"));
     }

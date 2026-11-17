@@ -3,6 +3,8 @@ package io.github.tewfiq321ui.lanupdate.lan;
 import io.github.tewfiq321ui.lanupdate.Config;
 import io.github.tewfiq321ui.lanupdate.LanUpdate;
 import io.github.tewfiq321ui.lanupdate.util.Background;
+import io.github.tewfiq321ui.lanupdate.util.ConfigFiles;
+import io.github.tewfiq321ui.lanupdate.util.ConfigFiles.ConfigFile;
 import io.github.tewfiq321ui.lanupdate.util.ModJars;
 import io.github.tewfiq321ui.lanupdate.util.ModJars.ModJar;
 import java.io.BufferedInputStream;
@@ -24,7 +26,8 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * Runs on the host while their world is open to LAN: announces itself on the network and
- * serves the .jar files of the host's mods folder (read-only) to friends who ask for them.
+ * serves the .jar files of the host's mods folder, plus shareable config files if allowed,
+ * read-only to friends who ask for them.
  */
 public final class LanShareServer {
     /** What the host's Update menu shows. */
@@ -184,8 +187,19 @@ public final class LanShareServer {
             if (path.equals(LanProtocol.MANIFEST_PATH)) {
                 List<ModJar> jars = ModJars.scan(ModJars.modsDir());
                 modCount = jars.size();
-                byte[] body = LanProtocol.manifestJson(jars, worldName).getBytes(StandardCharsets.UTF_8);
+                List<ConfigFile> configs = Config.shareConfigsOnLan() ? ConfigFiles.scan(ConfigFiles.configDir()) : List.of();
+                byte[] body = LanProtocol.manifestJson(jars, configs, worldName).getBytes(StandardCharsets.UTF_8);
                 sendHeaders(out, 200, "application/json; charset=utf-8", body.length);
+                out.write(body);
+            } else if (path.startsWith(LanProtocol.CONFIG_PATH)) {
+                String sha256 = path.substring(LanProtocol.CONFIG_PATH.length());
+                ConfigFile config = Config.shareConfigsOnLan() && sha256.matches("[0-9a-f]{64}") ? findConfigBySha256(sha256) : null;
+                if (config == null) {
+                    sendText(out, 404, "No such config file");
+                    return;
+                }
+                byte[] body = Files.readAllBytes(config.path());
+                sendHeaders(out, 200, "application/octet-stream", body.length);
                 out.write(body);
             } else if (path.startsWith(LanProtocol.FILE_PATH)) {
                 String sha256 = path.substring(LanProtocol.FILE_PATH.length());
@@ -213,6 +227,15 @@ public final class LanShareServer {
         for (ModJar jar : ModJars.scan(ModJars.modsDir())) {
             if (jar.sha256().equals(sha256)) {
                 return jar;
+            }
+        }
+        return null;
+    }
+
+    private static @Nullable ConfigFile findConfigBySha256(String sha256) throws IOException {
+        for (ConfigFile config : ConfigFiles.scan(ConfigFiles.configDir())) {
+            if (config.sha256().equals(sha256)) {
+                return config;
             }
         }
         return null;

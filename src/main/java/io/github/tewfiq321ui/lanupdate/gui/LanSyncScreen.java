@@ -42,6 +42,7 @@ public final class LanSyncScreen extends BaseScreen {
     private String target = "";
     private LanSync.@Nullable Plan plan;
     private boolean removeExtras;
+    private boolean copyConfigs = true;
     private Component progress = Component.empty();
     private LanSync.@Nullable Result result;
     private Component error = Component.empty();
@@ -116,6 +117,7 @@ public final class LanSyncScreen extends BaseScreen {
                 ui(() -> {
                     this.plan = loaded;
                     this.removeExtras = false;
+                    this.copyConfigs = true;
                     this.state = State.PLAN;
                 });
             } catch (Exception e) {
@@ -141,13 +143,14 @@ public final class LanSyncScreen extends BaseScreen {
             return;
         }
         boolean extras = this.removeExtras;
+        boolean configs = this.copyConfigs;
         this.state = State.SYNCING;
         this.progress = Component.translatable("lanupdate.lan.removing");
         refresh();
         Background.run("lanupdate-lan-sync", () -> {
             try {
                 String[] lastShown = {""};
-                LanSync.Result done = LanSync.apply(chosen, extras, (index, count, fileName, bytes, total) -> {
+                LanSync.Result done = LanSync.apply(chosen, extras, configs, (index, count, fileName, bytes, total) -> {
                     int percent = total > 0 ? (int) (bytes * 100 / total) : 0;
                     String key = index + ":" + percent;
                     if (!key.equals(lastShown[0])) {
@@ -228,11 +231,14 @@ public final class LanSyncScreen extends BaseScreen {
                     .withStyle(ChatFormatting.YELLOW)));
         }
 
-        if (current.nothingToDo(this.removeExtras)) {
+        if (current.nothingToDo(this.removeExtras, this.copyConfigs)) {
             body.addChild(text(Component.translatable("lanupdate.lan.same").withStyle(ChatFormatting.GREEN)));
         } else {
             body.addChild(text(Component.translatable("lanupdate.lan.summary",
                     current.toDownload().size(), Background.formatBytes(current.downloadBytes()), current.toReplace().size(), current.same())));
+            if (!current.configs().isEmpty()) {
+                body.addChild(text(Component.translatable("lanupdate.lan.configs_summary", current.configs().size(), current.configsSame())));
+            }
             body.addChild(text(Component.translatable("lanupdate.lan.trust").withStyle(ChatFormatting.GOLD)));
         }
 
@@ -243,6 +249,15 @@ public final class LanSyncScreen extends BaseScreen {
                 refresh();
             }));
         }
+        if (!current.configs().isEmpty()) {
+            String key = this.copyConfigs ? "lanupdate.lan.configs_copy" : "lanupdate.lan.configs_keep";
+            body.addChild(button(Component.translatable(key, current.configs().size()), _ -> {
+                this.copyConfigs = !this.copyConfigs;
+                refresh();
+            }));
+        } else if (current.manifest().configs().isEmpty()) {
+            body.addChild(text(Component.translatable("lanupdate.lan.configs_not_shared").withStyle(ChatFormatting.GRAY)));
+        }
 
         addList(body, "lanupdate.lan.list_download", current.toDownload().stream().map(LanProtocol.RemoteFile::name).toList(), ChatFormatting.GREEN);
         List<String> removing = new ArrayList<>(current.toReplace().stream().map(ModJar::fileName).toList());
@@ -252,6 +267,9 @@ public final class LanSyncScreen extends BaseScreen {
             addList(body, "lanupdate.lan.list_keep", current.extras().stream().map(ModJar::fileName).toList(), ChatFormatting.GRAY);
         }
         addList(body, "lanupdate.lan.list_remove", removing, ChatFormatting.RED);
+        if (this.copyConfigs) {
+            addList(body, "lanupdate.lan.list_configs", current.configs().stream().map(LanProtocol.RemoteConfig::path).toList(), ChatFormatting.AQUA);
+        }
     }
 
     private void buildDone(LinearLayout body) {
@@ -259,6 +277,9 @@ public final class LanSyncScreen extends BaseScreen {
         body.addChild(text(Component.translatable("lanupdate.lan.done", done.downloaded(), done.removedNow()).withStyle(ChatFormatting.GREEN)));
         if (done.removeAfterExit() > 0) {
             body.addChild(text(Component.translatable("lanupdate.lan.done_later", done.removeAfterExit())));
+        }
+        if (done.configsCopied() > 0) {
+            body.addChild(text(Component.translatable("lanupdate.lan.done_configs", done.configsCopied())));
         }
         body.addChild(text(Component.translatable("lanupdate.lan.restart")));
     }
@@ -282,7 +303,7 @@ public final class LanSyncScreen extends BaseScreen {
         switch (this.state) {
             case PLAN -> {
                 Button sync = footer.addChild(Button.builder(Component.translatable("lanupdate.lan.sync"), _ -> startSync()).build());
-                sync.active = this.plan != null && !this.plan.nothingToDo(this.removeExtras);
+                sync.active = this.plan != null && !this.plan.nothingToDo(this.removeExtras, this.copyConfigs);
                 footer.addChild(Button.builder(CommonComponents.GUI_BACK, _ -> backToSearch()).build());
             }
             case LOADING, SYNCING -> {

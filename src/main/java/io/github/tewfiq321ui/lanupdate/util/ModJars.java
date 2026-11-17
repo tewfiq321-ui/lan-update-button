@@ -158,10 +158,15 @@ public final class ModJars {
         if (base.length() > 150) {
             base = base.substring(0, 146) + ".jar";
         }
-        if (WINDOWS_RESERVED.matcher(base).matches()) {
+        if (isWindowsReserved(base)) {
             base = "_" + base;
         }
         return base;
+    }
+
+    /** Names like "CON" or "nul.txt" can't be used as file names on Windows. */
+    public static boolean isWindowsReserved(String fileName) {
+        return WINDOWS_RESERVED.matcher(fileName).matches();
     }
 
     /** A file name next to {@code name} in the folder that is not taken yet, e.g. "jei-lan1.jar". */
