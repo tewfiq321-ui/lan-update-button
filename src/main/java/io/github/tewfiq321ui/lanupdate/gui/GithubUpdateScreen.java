@@ -19,7 +19,7 @@ public final class GithubUpdateScreen extends BaseScreen {
 
     private State state = State.CHECKING;
     private boolean started;
-    private @Nullable GithubUpdater.Release release;
+    private GithubUpdater.@Nullable Release release;
     private int percent;
     private Component error = Component.empty();
 
